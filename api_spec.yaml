@@ -1,0 +1,487 @@
+openapi: 3.0.3
+info:
+  title: Holiday Promo API
+  description: API for the Holiday Promotion application
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api
+    description: Development server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, MODERATOR, USER]
+      required:
+        - email
+        - username
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        title:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+        - title
+        - content
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+      required:
+        - email
+        - password
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        password_confirm:
+          type: string
+          format: password
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+        - email
+        - username
+        - password
+        - password_confirm
+    TokenResponse:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+    RefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+      required:
+        - refresh
+    RefreshResponse:
+      type: object
+      properties:
+        access:
+          type: string
+    MagicCodeRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+        - email
+    MagicCodeRequestResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        email:
+          type: string
+          format: email
+    MagicCodeVerify:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+      required:
+        - email
+        - code
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+  responses:
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenError:
+      description: User does not have permission to perform this action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+paths:
+  /auth/register/:
+    post:
+      summary: Register a new user
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: array
+                    items:
+                      type: string
+                  username:
+                    type: array
+                    items:
+                      type: string
+                  password:
+                    type: array
+                    items:
+                      type: string
+                  password_confirm:
+                    type: array
+                    items:
+                      type: string
+  /auth/login/:
+    post:
+      summary: Login with email and password
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/refresh/:
+    post:
+      summary: Refresh JWT token
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/magic-code/request/:
+    post:
+      summary: Request a magic code for passwordless login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MagicCodeRequest"
+      responses:
+        "200":
+          description: Magic code sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicCodeRequestResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/magic-code/verify/:
+    post:
+      summary: Verify a magic code and get JWT tokens
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MagicCodeVerify"
+      responses:
+        "200":
+          description: Magic code verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Invalid input or code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /user/me/:
+    get:
+      summary: Get current user information
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    put:
+      summary: Update current user information
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                username:
+                  type: string
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+      responses:
+        "200":
+          description: User information updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /notes/:
+    get:
+      summary: Get user's notes
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    post:
+      summary: Create a new note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+              required:
+                - title
+                - content
+      responses:
+        "201":
+          description: Note created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /notes/{id}/:
+    parameters:
+      - name: id
+        in: path
+        description: Note ID
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get a specific note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Note retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Note not found
+    put:
+      summary: Update a specific note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+              required:
+                - title
+                - content
+      responses:
+        "200":
+          description: Note updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Note not found
+    delete:
+      summary: Delete a specific note
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Note deleted successfully
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Note not found
+  /notes/all/:
+    get:
+      summary: Get all notes (admin only)
+      tags:
+        - Notes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All notes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
