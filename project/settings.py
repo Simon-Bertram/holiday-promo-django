@@ -180,3 +180,19 @@ CORS_ALLOWED_ORIGINS = [
 
 # Email settings (for magic code)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
+
+# reCAPTCHA settings
+# Google test keys that always return success (for development only):
+# Site key: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+# Secret key: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+RECAPTCHA_TEST_SECRET_KEY = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'
+RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', RECAPTCHA_TEST_SECRET_KEY)
+
+# If we're using the test key in production, log a warning
+if not DEBUG and RECAPTCHA_SECRET_KEY == RECAPTCHA_TEST_SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "WARNING: Using reCAPTCHA test keys in production environment. "
+        "This completely bypasses reCAPTCHA protection. "
+        "Please set the RECAPTCHA_SECRET_KEY environment variable to your production key."
+    )

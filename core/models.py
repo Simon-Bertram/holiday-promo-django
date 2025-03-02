@@ -3,6 +3,8 @@ from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 import uuid
+import random
+import string
 
 class User(AbstractUser):
     """Custom user model with added role field for role-based access control and email verification."""
@@ -45,7 +47,7 @@ class User(AbstractUser):
 class MagicCode(models.Model):
     """Model to store magic codes for passwordless authentication."""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='magic_codes')
-    code = models.CharField(max_length=36, unique=True)
+    code = models.CharField(max_length=5)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
@@ -63,8 +65,17 @@ class MagicCode(models.Model):
 
     @classmethod
     def generate_code(cls, user, expiry_minutes=10):
-        """Generate a new magic code for a user."""
-        code = str(uuid.uuid4())
+        """Generate a new 5-digit magic code for a user."""
+        # Generate a random 5-digit number
+        code = ''.join(random.choices(string.digits, k=5))
+        
+        # Invalidate any existing unused codes for this user
+        cls.objects.filter(
+            user=user,
+            is_used=False
+        ).update(is_used=True)
+        
+        # Create new code
         expires_at = timezone.now() + timezone.timedelta(minutes=expiry_minutes)
         return cls.objects.create(
             user=user,

@@ -17,7 +17,9 @@ from .serializers import (
     UserRegistrationSerializer,
     CustomTokenObtainPairSerializer,
     MagicCodeRequestSerializer,
-    MagicCodeVerifySerializer
+    MagicCodeVerifySerializer,
+    CheckUserSerializer,
+    AdminLoginSerializer
 )
 
 User = get_user_model()
@@ -39,23 +41,44 @@ class UserView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         return self.request.user
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_user_exists(request):
+    """API endpoint to check if a user exists and get their role."""
+    serializer = CheckUserSerializer(data=request.data)
+    if serializer.is_valid():
+        email = serializer.validated_data['email']
+        try:
+            user = User.objects.get(email=email)
+            return Response({
+                "email": email,
+                "exists": True,
+                "role": user.role
+            })
+        except User.DoesNotExist:
+            return Response({
+                "email": email,
+                "exists": False
+            })
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_magic_code(request):
-    """API endpoint to request a magic code."""
+    """API endpoint to request a magic code with CAPTCHA verification."""
     serializer = MagicCodeRequestSerializer(data=request.data)
     if serializer.is_valid():
         email = serializer.validated_data['email']
         user = User.objects.get(email=email)
         
-        # Generate magic code
+        # Generate magic code (5-digit number)
         magic_code = MagicCode.generate_code(user)
         
         # Send email with magic code
         send_mail(
             'Your Login Code',
-            f'Your magic code is: {magic_code.code}',
+            f'Your 5-digit magic code is: {magic_code.code}',
             'noreply@example.com',
             [email],
             fail_silently=False,
@@ -112,3 +135,21 @@ def verify_email(request):
             "message": "Email already verified",
             "user": UserSerializer(user).data
         })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_login(request):
+    """API endpoint for admin/moderator login with password after magic code verification."""
+    serializer = AdminLoginSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.validated_data['user']
+        
+        # Generate tokens
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user).data
+        })
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

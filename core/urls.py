@@ -7,7 +7,9 @@ from .views import (
     UserView,
     request_magic_code,
     verify_magic_code,
-    verify_email
+    verify_email,
+    check_user_exists,
+    admin_login
 )
 
 app_name = 'core'
@@ -17,8 +19,10 @@ urlpatterns = [
     path('auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/register/', UserRegistrationView.as_view(), name='register'),
+    path('auth/check-user/', check_user_exists, name='check_user_exists'),
     path('auth/magic-code/request/', request_magic_code, name='request_magic_code'),
     path('auth/magic-code/verify/', verify_magic_code, name='verify_magic_code'),
+    path('auth/admin-login/', admin_login, name='admin_login'),
     path('auth/verify-email/', verify_email, name='verify_email'),
     
     # User endpoints
