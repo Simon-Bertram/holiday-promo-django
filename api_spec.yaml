@@ -89,7 +89,6 @@ components:
           type: string
       required:
         - email
-        - username
         - password
         - password_confirm
     TokenResponse:

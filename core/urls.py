@@ -9,7 +9,8 @@ from .views import (
     verify_magic_code,
     verify_email,
     check_user_exists,
-    admin_login
+    admin_login,
+    delete_user
 )
 
 app_name = 'core'
@@ -27,4 +28,5 @@ urlpatterns = [
     
     # User endpoints
     path('user/me/', UserView.as_view(), name='user_me'),
+    path('user/delete/', delete_user, name='delete_user'),
 ] 

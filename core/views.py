@@ -153,3 +153,21 @@ def admin_login(request):
             'user': UserSerializer(user).data
         })
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_user(request):
+    """API endpoint to delete a user's own account."""
+    user = request.user
+    
+    # Only allow users to delete their own accounts
+    # Admins and moderators should use the admin interface for user management
+    if user.role == 'USER':
+        # Perform the deletion
+        user.delete()
+        return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
+    else:
+        return Response(
+            {"message": "Admin and moderator accounts cannot be deleted through this endpoint"}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
