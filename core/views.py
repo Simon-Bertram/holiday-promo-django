@@ -171,3 +171,15 @@ def delete_user(request):
             {"message": "Admin and moderator accounts cannot be deleted through this endpoint"}, 
             status=status.HTTP_403_FORBIDDEN
         )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_count(request):
+    """API endpoint to get the total number of users."""
+    if request.user.role not in ['ADMIN', 'MODERATOR']:
+        return Response(
+            {"message": "You are not authorized to access this endpoint"}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    regular_user_count = User.objects.filter(role='USER').count()
+    return Response({"regular_user_count": regular_user_count}, status=status.HTTP_200_OK)
