@@ -11,7 +11,8 @@ from .views import (
     check_user_exists,
     admin_login,
     delete_user,
-    get_user_count
+    get_user_count,
+    logout_view
 )
 
 app_name = 'core'
@@ -19,6 +20,7 @@ app_name = 'core'
 urlpatterns = [
     # Authentication endpoints
     path('auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/logout/', logout_view, name='logout'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/register/', UserRegistrationView.as_view(), name='register'),
     path('auth/check-user/', check_user_exists, name='check_user_exists'),
