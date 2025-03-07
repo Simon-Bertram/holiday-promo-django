@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     CustomTokenObtainPairView,
+    CustomTokenRefreshView,
     UserRegistrationView,
     UserView,
     request_magic_code,
@@ -21,7 +22,7 @@ urlpatterns = [
     # Authentication endpoints
     path('auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/logout/', logout_view, name='logout'),
-    path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/register/', UserRegistrationView.as_view(), name='register'),
     path('auth/check-user/', check_user_exists, name='check_user_exists'),
     path('auth/magic-code/request/', request_magic_code, name='request_magic_code'),

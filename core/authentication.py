@@ -3,6 +3,7 @@ from rest_framework.authentication import CSRFCheck
 from rest_framework import exceptions
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from datetime import timedelta
 
 class CookieJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
@@ -26,19 +27,25 @@ class CookieJWTAuthentication(JWTAuthentication):
         """
         Enforce CSRF validation for cookie-based auth
         """
-        check = CSRFCheck()
-        # populates request.META['CSRF_COOKIE']
-        check.process_request(request)
+        # Skip CSRF check for test client
+        if hasattr(request, '_dont_enforce_csrf_checks'):
+            return
+
+        # Optional development bypass (use with caution)
+        if settings.DEBUG and getattr(settings, 'CSRF_DEVELOPMENT_BYPASS', False):
+          return
         
-        csrf_token = request.META.get('CSRF_COOKIE')
-        if csrf_token is None:
-            raise exceptions.PermissionDenied('CSRF token not found')
-            
         # Get the CSRF token from the request header
         request_csrf_token = request.META.get('HTTP_X_CSRFTOKEN', '')
         
         if not request_csrf_token:
             raise exceptions.PermissionDenied('CSRF token missing')
             
-        if not csrf_token == request_csrf_token:
+        # Get the CSRF token from the cookie
+        csrf_token = request.COOKIES.get('csrftoken')
+        
+        if not csrf_token:
+            raise exceptions.PermissionDenied('CSRF cookie not found')
+            
+        if request_csrf_token != csrf_token:
             raise exceptions.PermissionDenied('CSRF token mismatch')

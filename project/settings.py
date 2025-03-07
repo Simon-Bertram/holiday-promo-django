@@ -15,6 +15,7 @@ from datetime import timedelta
 import os
 from dotenv import load_dotenv
 from urllib.parse import urlparse
+import sys
 
 load_dotenv()
 
@@ -89,18 +90,25 @@ WSGI_APPLICATION = 'project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': tmpPostgres.path.replace('/', ''),
-        'USER': tmpPostgres.username,
-        'PASSWORD': tmpPostgres.password,
-        'HOST': tmpPostgres.hostname,
-        'PORT': 5432,
+# Use SQLite for testing
+if 'test' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'neondb'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 
 # Password validation
@@ -151,7 +159,7 @@ AUTH_USER_MODEL = 'core.User'
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        '../core/authentication.CookieJWTAuthentication',
+        'core.authentication.CookieJWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': [
@@ -175,21 +183,26 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
 
+# Cookie settings
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # CSRF cookie must be accessible to JavaScript
+SESSION_COOKIE_SAMESITE = 'Lax'  # Or 'None' with Secure flag for cross-domain
+CSRF_COOKIE_SAMESITE = 'Lax'  # Or 'None' with Secure flag for cross-domain
+
+# Set to True in production with HTTPS
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+else:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Next.js frontend
 ]
 
-# Critical for cookies to work cross-domain
-CORS_ALLOW_CREDENTIALS = True
-
-# Cookie settings
-SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False  # CSRF cookie must be accessible to JavaScript
-SESSION_COOKIE_SECURE = True  # Use in production with HTTPS
-CSRF_COOKIE_SECURE = True     # Use in production with HTTPS
-SESSION_COOKIE_SAMESITE = 'Lax'  # Or 'None' with Secure flag for cross-domain
-CSRF_COOKIE_SAMESITE = 'Lax'  # Or 'None' with Secure flag for cross-domain
+CORS_ALLOW_CREDENTIALS = True  # Required for cookies to be accepted in cross-origin requests
 
 # Email settings (for magic code)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development

@@ -3,13 +3,16 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from django.middleware import csrf
 
 from rest_framework import status, viewsets, permissions, generics
+from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from .models import MagicCode
 from .serializers import (
@@ -27,6 +30,61 @@ User = get_user_model()
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom token view that uses our enhanced token serializer."""
     serializer_class = CustomTokenObtainPairSerializer
+    
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        
+        if response.status_code == 200:
+            # Get tokens from the response data
+            access_token = response.data.get('access')
+            refresh_token = response.data.get('refresh')
+            
+            # Get token lifetimes from settings
+            access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
+            refresh_token_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
+            
+            # Set the access token in an HTTP-only cookie
+            response.set_cookie(
+                key='access_token',
+                value=access_token,
+                max_age=int(access_token_lifetime.total_seconds()),
+                httponly=True,
+                samesite=settings.SESSION_COOKIE_SAMESITE,
+                secure=settings.SESSION_COOKIE_SECURE,
+                path='/'
+            )
+            
+            # Set the refresh token in an HTTP-only cookie
+            response.set_cookie(
+                key='refresh_token',
+                value=refresh_token,
+                max_age=int(refresh_token_lifetime.total_seconds()),
+                httponly=True,
+                samesite=settings.SESSION_COOKIE_SAMESITE,
+                secure=settings.SESSION_COOKIE_SECURE,
+                path='/'
+            )
+            
+            # Set CSRF token in a non-HTTP-only cookie (needed for CSRF protection)
+            csrf_token = csrf.get_token(request)
+            response.set_cookie(
+                key='csrftoken',
+                value=csrf_token,
+                max_age=60 * 60 * 24 * 7,  # 7 days
+                httponly=False,  # CSRF token must be accessible to JavaScript
+                samesite=settings.CSRF_COOKIE_SAMESITE,
+                secure=settings.CSRF_COOKIE_SECURE,
+                path='/'
+            )
+            
+            # Keep user data in response but remove tokens from JSON body
+            # since they're now in cookies
+            if 'access' in response.data:
+                del response.data['access']
+            if 'refresh' in response.data:
+                del response.data['refresh']
+                
+        return response
 
 class UserRegistrationView(generics.CreateAPIView):
     """View for user registration."""
@@ -175,12 +233,24 @@ def delete_user(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
-    """Invalidate the user's refresh token on logout."""
+    """Invalidate the user's token and clear cookies on logout."""
     try:
-        refresh_token = request.data.get('refresh')
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-        return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
+        # Get refresh token from cookie instead of request body
+        refresh_token = request.COOKIES.get('refresh_token')
+        
+        if refresh_token:
+            # Blacklist the token
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        
+        # Create response and clear cookies
+        response = Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
+        
+        # Clear cookies
+        response.delete_cookie('access_token', path='/')
+        response.delete_cookie('refresh_token', path='/')
+        
+        return response
     except Exception as e:
         return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -195,3 +265,64 @@ def get_user_count(request):
         )
     regular_user_count = User.objects.filter(role='USER').count()
     return Response({"regular_user_count": regular_user_count}, status=status.HTTP_200_OK)
+
+class CustomTokenRefreshView(APIView):
+    """Custom token refresh view that works with HTTP-only cookies."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, *args, **kwargs):
+        # Get refresh token from cookie
+        refresh_token = request.COOKIES.get('refresh_token')
+        
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token not found"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            # Create a refresh token instance and get a new access token
+            refresh = RefreshToken(refresh_token)
+            access_token = str(refresh.access_token)
+            
+            # Get token lifetime from settings
+            access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
+            
+            # Prepare the response
+            response = Response({'detail': 'Token refreshed successfully'})
+            
+            # Set the new access token as an HTTP-only cookie
+            response.set_cookie(
+                key='access_token',
+                value=access_token,
+                max_age=int(access_token_lifetime.total_seconds()),
+                httponly=True,
+                samesite=settings.SESSION_COOKIE_SAMESITE,
+                secure=settings.SESSION_COOKIE_SECURE,
+                path='/'
+            )
+            
+            # If rotation is enabled, update the refresh token too
+            if settings.SIMPLE_JWT.get('ROTATE_REFRESH_TOKENS', False):
+                # Get the new refresh token
+                new_refresh_token = str(refresh)
+                refresh_token_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
+                
+                # Set the new refresh token as an HTTP-only cookie
+                response.set_cookie(
+                    key='refresh_token',
+                    value=new_refresh_token,
+                    max_age=int(refresh_token_lifetime.total_seconds()),
+                    httponly=True,
+                    samesite=settings.SESSION_COOKIE_SAMESITE,
+                    secure=settings.SESSION_COOKIE_SECURE,
+                    path='/'
+                )
+            
+            return response
+            
+        except TokenError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
