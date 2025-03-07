@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     
     # Local apps
@@ -178,6 +179,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Next.js frontend
 ]
 
+# Critical for cookies to work cross-domain
+CORS_ALLOW_CREDENTIALS = True
+
+# Cookie settings
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # CSRF cookie must be accessible to JavaScript
+SESSION_COOKIE_SECURE = True  # Use in production with HTTPS
+CSRF_COOKIE_SECURE = True     # Use in production with HTTPS
+SESSION_COOKIE_SAMESITE = 'Lax'  # Or 'None' with Secure flag for cross-domain
+CSRF_COOKIE_SAMESITE = 'Lax'  # Or 'None' with Secure flag for cross-domain
+
 # Email settings (for magic code)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
 
@@ -196,3 +208,8 @@ if not DEBUG and RECAPTCHA_SECRET_KEY == RECAPTCHA_TEST_SECRET_KEY:
         "This completely bypasses reCAPTCHA protection. "
         "Please set the RECAPTCHA_SECRET_KEY environment variable to your production key."
     )
+
+# For development, you might need to adjust secure flags if not using HTTPS
+if DEBUG:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
