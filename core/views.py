@@ -132,6 +132,10 @@ def request_magic_code(request):
         
         # Generate magic code (5-digit number)
         magic_code = MagicCode.generate_code(user)
+
+        # if in development mode, console log the magic code
+        if settings.DEBUG:
+            print(f"Magic code for {email}: {magic_code.code}")
         
         # Send email with magic code
         send_mail(
@@ -197,20 +201,16 @@ def verify_email(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_login(request):
-    """API endpoint for admin/moderator login with password after magic code verification."""
-    serializer = AdminLoginSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.validated_data['user']
-        
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
-        
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': UserSerializer(user).data
-        })
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    """API endpoint for admin/moderator login with magic code verification only.
+    
+    This endpoint is now deprecated as all users (including admins) should use
+    the standard magic code verification flow.
+    """
+    # Redirect to the standard magic code verification flow
+    return Response({
+        "message": "This endpoint is deprecated. Please use the standard magic code verification flow.",
+        "redirect": "auth/magic-code/verify/"
+    }, status=status.HTTP_308_PERMANENT_REDIRECT)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

@@ -18,26 +18,18 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """Serializer for user registration."""
-    password = serializers.CharField(
-        write_only=True, 
-        required=True,
-        validators=[validate_password]
-    )
-    password_confirm = serializers.CharField(write_only=True, required=True)
     
     class Meta:
         model = User
-        fields = ['email', 'password', 'password_confirm', 'first_name', 'last_name']
-        
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-        return attrs
+        fields = ['email', 'first_name', 'last_name']
         
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
         # Set username to email address
         validated_data['username'] = validated_data['email']
+        # Generate a random password since we won't be using it
+        import secrets
+        random_password = secrets.token_urlsafe(32)
+        validated_data['password'] = random_password
         user = User.objects.create_user(**validated_data)
         return user
 
@@ -128,14 +120,14 @@ class CheckUserSerializer(serializers.Serializer):
             raise serializers.ValidationError("No user with this email address.")
         return value
 
+# This serializer is no longer needed since all users will use magic code login
+# Keeping it for reference but it won't be used
 class AdminLoginSerializer(serializers.Serializer):
-    """Serializer for admin/moderator login with password after magic code verification."""
+    """Serializer for admin/moderator login with magic code verification only."""
     email = serializers.EmailField(required=True)
-    password = serializers.CharField(required=True, style={'input_type': 'password'})
     
     def validate(self, attrs):
         email = attrs.get('email')
-        password = attrs.get('password')
         
         try:
             user = User.objects.get(email=email)
@@ -145,10 +137,6 @@ class AdminLoginSerializer(serializers.Serializer):
         # Check if user is admin or moderator
         if user.role not in ['ADMIN', 'MODERATOR']:
             raise serializers.ValidationError({"email": "This endpoint is only for admin or moderator users."})
-            
-        # Check password
-        if not user.check_password(password):
-            raise serializers.ValidationError({"password": "Invalid password."})
             
         attrs['user'] = user
         return attrs 
