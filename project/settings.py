@@ -90,8 +90,28 @@ WSGI_APPLICATION = 'project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# Use SQLite for testing and development (DEBUG=True)
-if 'test' in sys.argv or DEBUG:
+# Parse database URL
+db_url = os.environ.get('DATABASE_URL')
+
+if db_url:
+    # Parse the URL
+    parsed_url = urlparse(db_url)
+    
+    # Extract database connection info
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': parsed_url.path[1:],  # Remove leading slash
+            'USER': parsed_url.username,
+            'PASSWORD': parsed_url.password,
+            'HOST': parsed_url.hostname,
+            'PORT': parsed_url.port or '5432',
+            'OPTIONS': {
+                'sslmode': 'require'
+            }
+        }
+    }
+elif 'test' in sys.argv or DEBUG:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -99,16 +119,10 @@ if 'test' in sys.argv or DEBUG:
         }
     }
 else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'neondb'),
-            'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
-        }
-    }
+    raise Exception(
+        'DATABASE_URL environment variable is not set and DEBUG is False. '
+        'Please set the DATABASE_URL environment variable.'
+    )
 
 
 # Password validation
