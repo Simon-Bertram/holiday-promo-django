@@ -22,7 +22,6 @@ from .serializers import (
     MagicCodeRequestSerializer,
     MagicCodeVerifySerializer,
     CheckUserSerializer,
-    AdminLoginSerializer
 )
 
 User = get_user_model()
@@ -171,12 +170,53 @@ def verify_magic_code(request):
         
         # Generate tokens
         refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
         
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
+        # Create the response
+        response = Response({
             'user': UserSerializer(user).data
         })
+        
+        # Get token lifetimes from settings
+        access_token_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
+        refresh_token_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
+        
+        # Set the access token in an HTTP-only cookie
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            max_age=int(access_token_lifetime.total_seconds()),
+            httponly=True,
+            samesite=settings.SESSION_COOKIE_SAMESITE,
+            secure=settings.SESSION_COOKIE_SECURE,
+            path='/'
+        )
+        
+        # Set the refresh token in an HTTP-only cookie
+        response.set_cookie(
+            key='refresh_token',
+            value=str(refresh),
+            max_age=int(refresh_token_lifetime.total_seconds()),
+            httponly=True,
+            samesite=settings.SESSION_COOKIE_SAMESITE,
+            secure=settings.SESSION_COOKIE_SECURE,
+            path='/'
+        )
+        
+        # Set CSRF token in a non-HTTP-only cookie
+        csrf_token = csrf.get_token(request)
+        response.set_cookie(
+            key='csrftoken',
+            value=csrf_token,
+            max_age=60 * 60 * 24 * 7,  # 7 days
+            httponly=False,  # CSRF token must be accessible to JavaScript
+            samesite=settings.CSRF_COOKIE_SAMESITE,
+            secure=settings.CSRF_COOKIE_SECURE,
+            path='/'
+        )
+        
+        return response
+        
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -221,9 +261,38 @@ def delete_user(request):
     # Only allow users to delete their own accounts
     # Admins and moderators should use the admin interface for user management
     if user.role == 'USER':
-        # Perform the deletion
-        user.delete()
-        return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
+        try:
+            # Get tokens before deleting the user
+            refresh_token = request.COOKIES.get('refresh_token')
+            
+            # Perform the deletion
+            user.delete()
+            
+            # Create response
+            response = Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
+            
+            # Clear all auth-related cookies with proper domain and path
+            response.delete_cookie('access_token', path='/')
+            response.delete_cookie('refresh_token', path='/')
+            response.delete_cookie('csrftoken', path='/')
+            
+            # Blacklist the token if it exists
+            if refresh_token:
+                try:
+                    token = RefreshToken(refresh_token)
+                    token.blacklist()
+                except Exception as e:
+                    if settings.DEBUG:
+                        print(f"Error blacklisting token: {e}")
+            
+            return response
+        except Exception as e:
+            if settings.DEBUG:
+                print(f"Error deleting account: {e}")
+            return Response(
+                {"message": "Error deleting account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
     else:
         return Response(
             {"message": "Admin and moderator accounts cannot be deleted through this endpoint"}, 
@@ -235,24 +304,34 @@ def delete_user(request):
 def logout_view(request):
     """Invalidate the user's token and clear cookies on logout."""
     try:
-        # Get refresh token from cookie instead of request body
+        # Get tokens
         refresh_token = request.COOKIES.get('refresh_token')
         
-        if refresh_token:
-            # Blacklist the token
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-        
-        # Create response and clear cookies
+        # Create response first
         response = Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
         
-        # Clear cookies
+        # Clear all auth-related cookies
         response.delete_cookie('access_token', path='/')
         response.delete_cookie('refresh_token', path='/')
+        response.delete_cookie('csrftoken', path='/')
+        
+        # Blacklist the token if it exists
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception as e:
+                # Log the error but don't fail the request
+                print(f"Error blacklisting token during logout: {e}")
         
         return response
     except Exception as e:
-        return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if settings.DEBUG:
+            print(f"Logout error: {e}")
+        return Response(
+            {"message": "Error during logout"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
