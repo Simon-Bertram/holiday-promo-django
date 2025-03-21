@@ -23,6 +23,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         model = User
         fields = ['email', 'first_name', 'last_name']
         
+    def validate(self, attrs):
+        if not attrs.get('first_name'):
+            raise serializers.ValidationError({'first_name': 'First name is required'})
+        if not attrs.get('last_name'):
+            raise serializers.ValidationError({'last_name': 'Last name is required'})
+        return attrs
+        
     def create(self, validated_data):
         # Set username to email address
         validated_data['username'] = validated_data['email']
